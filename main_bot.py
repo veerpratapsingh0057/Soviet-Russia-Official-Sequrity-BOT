@@ -20,9 +20,6 @@ GREEN = 0x00C853
 RED = 0xD32F2F
 FOOTER = "Soviet Russia Life Simulator • Official Bot"
 
-INVITE_URL = "https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands"
-SUPPORT_URL = "https://discord.gg/YOUR_SUPPORT_SERVER"
-
 # ─── Database ─────────────────────────────────────────────────────────────────
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
