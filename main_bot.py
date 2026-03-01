@@ -735,8 +735,8 @@ async def _invite(ctx_or_inter):
         title="⚙️ Invite SRLS Bot",
         description=(
             "Use the buttons below to invite the bot or join our support server.\n\n"
-            f"🔗 **[Invite Bot]({INVITE_URL})**\n"
-            f"💬 **[Support Server]({SUPPORT_URL})**"
+            f"🔗 **[Invite Bot](https://discord.com/oauth2/authorize?client_id=1467519941661036678&permissions=8&integration_type=0&scope=bot+applications.commands)**\n"
+            f"💬 **[Support Server](https://discord.gg/KdvTzFGyxv)**"
         ),
         color=GREEN
     )
@@ -746,7 +746,7 @@ async def _invite(ctx_or_inter):
 
     view = discord.ui.View()
     view.add_item(discord.ui.Button(label="Invite Bot", url="https://discord.com/oauth2/authorize?client_id=1467519941661036678&permissions=8&integration_type=0&scope=bot+applications.commands" ,style=discord.ButtonStyle.link, emoji="🔗"))
-    view.add_item(discord.ui.Button(label="Support Server", url="https://discord.gg/ZTYeKJ2c", style=discord.ButtonStyle.link, emoji="💬"))
+    view.add_item(discord.ui.Button(label="Support Server", url="https://discord.gg/KdvTzFGyxv", style=discord.ButtonStyle.link, emoji="💬"))
 
     if isinstance(ctx_or_inter, commands.Context):
         await ctx_or_inter.send(embed=e, view=view)
