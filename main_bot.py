@@ -816,7 +816,6 @@ e.add_field(name="⚡ Response Ping", value=f"`{response_latency:.2f}ms`", inlin
 e.set_footer(text=FOOTER)
 if bot.user:
     e.set_thumbnail(url=bot.user.display_avatar.url)
-
     await send_embed(ctx_or_inter, e)
 
 # ─── CHANGE PREFIX ────────────────────────────────────────────────────────────
