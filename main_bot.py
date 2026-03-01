@@ -720,15 +720,16 @@ async def nick_error(ctx, error):
 # ─── ANNOUNCE ────────────────────────────────────────────────────────────────
 @bot.command(name="announce")
 @commands.has_permissions(manage_messages=True)
-async def announce_prefix(ctx, *, message: str = None):
-    await _announce(ctx, message, None, False, "embed")
+async def announce_prefix(ctx, channel: discord.TextChannel = None, *, message: str = None):
+    await _announce(ctx, message, None, False, "embed", channel)
 
 @bot.tree.command(name="announce", description="📢 Make an announcement (embed or normal)")
 @app_commands.describe(
     message="The announcement message",
     role="Role to mention (optional)",
     everyone="Mention @everyone (True/False)",
-    content_type="Send as embed or normal message (default: embed)"
+    content_type="Send as embed or normal message (default: embed)",
+    channel="Channel to send the announcement in"
 )
 @app_commands.choices(content_type=[
     app_commands.Choice(name="Embed", value="embed"),
@@ -739,23 +740,55 @@ async def announce_slash(
     message: str,
     role: discord.Role = None,
     everyone: bool = False,
-    content_type: app_commands.Choice[str] = None
+    content_type: app_commands.Choice[str] = None,
+    channel: discord.TextChannel = None
 ):
     if not inter.user.guild_permissions.manage_messages:
         return await inter.response.send_message(embed=no_perm_embed(), ephemeral=True)
-    content_mode = content_type.value if content_type else "embed"
+
+    mode = content_type.value if content_type else "embed"
     await inter.response.defer(thinking=True)
-    await _announce(inter, message, role, everyone, content_mode)
+    await _announce(inter, message, role, everyone, mode, channel)
 
 # ─── Core Function ───────────────────────────────────────────────────────────
-async def _announce(ctx_or_inter, message: str, role: discord.Role = None, everyone: bool = False, mode: str = "embed"):
+async def _announce(
+    ctx_or_inter,
+    message: str,
+    role: discord.Role = None,
+    everyone: bool = False,
+    mode: str = "embed",
+    channel: discord.TextChannel = None
+):
     if not message:
         return await send_embed(ctx_or_inter, error_embed("Missing Message", "You must provide a message to announce."))
 
+    # Detect target channel
+    target_channel = (
+        channel
+        or (ctx_or_inter.channel if isinstance(ctx_or_inter, (commands.Context, discord.Interaction)) else None)
+    )
+    if not target_channel:
+        return await send_embed(ctx_or_inter, error_embed("No Channel Found", "Could not find a valid channel."))
+
     mention_text = "@everyone" if everyone else (role.mention if role else "")
     MAX_LEN = 2000
-    parts = [message[i:i + MAX_LEN] for i in range(0, len(message), MAX_LEN)]
 
+    # Split message safely without cutting words
+    def split_message(text, limit):
+        parts = []
+        while len(text) > limit:
+            split_at = text.rfind(" ", 0, limit)
+            if split_at == -1:
+                split_at = limit
+            parts.append(text[:split_at])
+            text = text[split_at:].strip()
+        if text:
+            parts.append(text)
+        return parts
+
+    parts = split_message(message, MAX_LEN)
+
+    # Send announcement in multiple parts if needed
     for i, part in enumerate(parts):
         if mode == "embed":
             embed = discord.Embed(
@@ -766,20 +799,19 @@ async def _announce(ctx_or_inter, message: str, role: discord.Role = None, every
             embed.set_footer(text=FOOTER)
             if bot.user:
                 embed.set_thumbnail(url=bot.user.display_avatar.url)
+            await target_channel.send(content=mention_text if i == 0 else None, embed=embed)
 
-            if isinstance(ctx_or_inter, discord.Interaction):
-                await ctx_or_inter.channel.send(content=mention_text if i == 0 else None, embed=embed)
-            else:
-                await ctx_or_inter.send(content=mention_text if i == 0 else None, embed=embed)
-
-        else:  # mode == "normal"
+        else:  # normal message mode
             msg = f"{mention_text}\n\n{part}" if i == 0 and mention_text else part
-            if isinstance(ctx_or_inter, discord.Interaction):
-                await ctx_or_inter.channel.send(msg)
-            else:
-                await ctx_or_inter.send(msg)
+            await target_channel.send(msg)
 
-    await send_embed(ctx_or_inter, success_embed("Announcement Sent", "Your message was successfully sent.", ctx_or_inter), ephemeral=True)
+    # Confirmation
+    confirm_embed = success_embed(
+        "✅ Announcement Sent",
+        f"Your message has been successfully sent to {target_channel.mention}.",
+        ctx_or_inter
+    )
+    await send_embed(ctx_or_inter, confirm_embed, ephemeral=True)
 
 @announce_prefix.error
 async def announce_error(ctx, error):
@@ -917,7 +949,7 @@ async def _help(ctx_or_inter, prefix: str):
             f"`{prefix}lock [#channel]` — Lock channel\n"
             f"`{prefix}unlock [#channel]` — Unlock channel\n"
             f"`{prefix}slowmode <seconds>` — Set slowmode\n"
-            f"`{prefix}nick @user <name>` — Change nickname"
+            f"`{prefix}nick @user <name>` — Change nickname\n"
             f"`{prefix}announce <msg>` – Send announcements"
         ),
         inline=False
