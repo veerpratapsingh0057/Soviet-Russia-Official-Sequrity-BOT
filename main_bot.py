@@ -717,6 +717,59 @@ async def nick_error(ctx, error):
 #  UTILITY COMMANDS
 # ════════════════════════════════════════════════════════════════════════════════
 
+# ─── ANNOUNCE ─────────────────────────────────────────────────────────────────
+@bot.command(name="announce")
+@commands.has_permissions(manage_messages=True)
+async def announce_prefix(ctx, *, message: str = None):
+    await _announce(ctx, message)
+
+@bot.tree.command(name="announce", description="📢 Make an announcement with role or everyone mention")
+@app_commands.describe(
+    message="The announcement message",
+    role="Role to mention (optional)",
+    everyone="Mention @everyone (True/False)"
+)
+async def announce_slash(inter: discord.Interaction, message: str, role: discord.Role = None, everyone: bool = False):
+    if not inter.user.guild_permissions.manage_messages:
+        return await inter.response.send_message(embed=no_perm_embed(), ephemeral=True)
+    await _announce(inter, message, role, everyone)
+
+async def _announce(ctx_or_inter, message: str = None, role: discord.Role = None, everyone: bool = False):
+    if not message:
+        return await send_embed(ctx_or_inter, error_embed("Missing Message", "You must provide a message to announce."))
+
+    mention_text = ""
+    if everyone:
+        mention_text = "@everyone"
+    elif role:
+        mention_text = role.mention
+
+    MAX_LEN = 2000
+    message_parts = [message[i:i + MAX_LEN] for i in range(0, len(message), MAX_LEN)]
+
+    for i, part in enumerate(message_parts):
+        embed = discord.Embed(
+            title=f"📢 Announcement {'(Part '+str(i+1)+')' if len(message_parts) > 1 else ''}",
+            description=part,
+            color=GREEN
+        )
+        embed.set_footer(text=FOOTER)
+        if bot.user:
+            embed.set_thumbnail(url=bot.user.display_avatar.url)
+        if isinstance(ctx_or_inter, discord.Interaction):
+            await ctx_or_inter.channel.send(content=mention_text if i == 0 else None, embed=embed)
+        else:
+            await ctx_or_inter.send(content=mention_text if i == 0 else None, embed=embed)
+
+    await send_embed(ctx_or_inter, success_embed("Announcement Sent", "Your message was successfully sent.", ctx_or_inter), ephemeral=True)
+
+@announce_prefix.error
+async def announce_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send(embed=no_perm_embed())
+    else:
+        await ctx.send(embed=error_embed("Error", str(error)))
+        
 # ─── PING ─────────────────────────────────────────────────────────────────────
 @bot.command(name="ping")
 async def ping_prefix(ctx):
@@ -847,6 +900,7 @@ async def _help(ctx_or_inter, prefix: str):
             f"`{prefix}unlock [#channel]` — Unlock channel\n"
             f"`{prefix}slowmode <seconds>` — Set slowmode\n"
             f"`{prefix}nick @user <name>` — Change nickname"
+            f"`{prefix}announce <msg>` – Send announcements"
         ),
         inline=False
     )
