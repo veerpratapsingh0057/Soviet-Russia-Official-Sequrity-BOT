@@ -810,12 +810,13 @@ async def _ping(ctx_or_inter):
     response_latency = (time.perf_counter() - start) * 1000
 
     e = discord.Embed(title="⚙️ Latency Report", color=GREEN)
-e.add_field(name="🤖 Bot Latency", value=f"`{bot_latency:.2f}ms`", inline=True)
-e.add_field(name="🗄️ DB Latency", value=f"`{db_latency:.2f}ms`", inline=True)
-e.add_field(name="⚡ Response Ping", value=f"`{response_latency:.2f}ms`", inline=True)
-e.set_footer(text=FOOTER)
-if bot.user:
-    e.set_thumbnail(url=bot.user.display_avatar.url)
+    e.add_field(name="🤖 Bot Latency", value=f"`{bot_latency:.2f}ms`", inline=True)
+    e.add_field(name="🗄️ DB Latency", value=f"`{db_latency:.2f}ms`", inline=True)
+    e.add_field(name="⚡ Response Ping", value=f"`{response_latency:.2f}ms`", inline=True)
+    e.set_footer(text=FOOTER)
+    if bot.user:
+        e.set_thumbnail(url=bot.user.display_avatar.url)
+
     await send_embed(ctx_or_inter, e)
 
 # ─── CHANGE PREFIX ────────────────────────────────────────────────────────────
