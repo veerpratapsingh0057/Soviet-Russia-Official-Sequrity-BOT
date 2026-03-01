@@ -218,29 +218,34 @@ async def warn_slash(inter: discord.Interaction, member: discord.Member, reason:
     await _warn(inter, member, reason)
 
 async def _warn(ctx_or_inter, member: discord.Member, reason: str):
-    guild = ctx_or_inter.guild if isinstance(ctx_or_inter, commands.Context) else ctx_or_inter.guild
+    guild = ctx_or_inter.guild
     mod = ctx_or_inter.author if isinstance(ctx_or_inter, commands.Context) else ctx_or_inter.user
     ts = datetime.datetime.utcnow().isoformat()
 
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("INSERT INTO warnings (guild_id, user_id, moderator_id, reason, timestamp) VALUES (?,?,?,?,?)",
-                         (guild.id, member.id, mod.id, reason, ts))
+        await db.execute(
+            "INSERT INTO warnings (guild_id, user_id, moderator_id, reason, timestamp) VALUES (?,?,?,?,?)",
+            (guild.id, member.id, mod.id, reason, ts)
+        )
         await db.commit()
         async with db.execute("SELECT COUNT(*) FROM warnings WHERE guild_id=? AND user_id=?", (guild.id, member.id)) as c:
             count = (await c.fetchone())[0]
 
     await log_action(guild.id, "WARN", member.id, mod.id, reason)
 
-    # Auto-kick on 3rd warning
+    # === AUTO-KICK ON 3 WARNINGS ===
     if count >= 3:
-        dm_embed = discord.Embed(title="🚨 You Have Been Warned & Kicked", color=RED,
-                                 description=(
-                                     f"**Server:** {guild.name}\n"
-                                     f"**Reason:** {reason}\n"
-                                     f"**Total Warnings:** {count}\n\n"
-                                     f"⚠️ You have reached **3 warnings** and have been automatically kicked."
-                                 ))
-        dm_embed.set_footer(text=FOOTER)
+        dm_embed = discord.Embed(
+            title="🚨 You Have Been Warned & Kicked",
+            color=RED,
+            description=(
+                f"**Server:** {guild.name}\n"
+                f"**Moderator:** {mod.mention}\n"
+                f"**Reason:** {reason}\n"
+                f"**Total Warnings:** {count}\n\n"
+                f"⚠️ You have reached **3 warnings** and have been automatically kicked."
+            )
+        ).set_footer(text=FOOTER)
         dm_ok = await dm_user(member, dm_embed)
 
         try:
@@ -249,28 +254,41 @@ async def _warn(ctx_or_inter, member: discord.Member, reason: str):
         except discord.Forbidden:
             pass
 
-        e = success_embed("Warning Issued + Auto-Kicked", 
-                          f"{member.mention} received their **{count}rd warning** and has been **automatically kicked**.\n**Reason:** {reason}",
-                          ctx_or_inter)
+        e = success_embed(
+            "Warning Issued + Auto-Kicked",
+            f"{member.mention} received their **{count}rd warning** and has been **automatically kicked**.\n"
+            f"**Reason:** {reason}\n"
+            f"**Moderator:** {mod.mention}",
+            ctx_or_inter
+        )
         e.add_field(name="⚠️ Auto-Kick", value="Triggered at 3 warnings", inline=False)
         e.add_field(name="DM Alert", value="✅ Sent alert in DM" if dm_ok else "❌ Could not send DM")
         await send_embed(ctx_or_inter, e)
         return
 
-    dm_embed = discord.Embed(title="🚨 You Have Been Warned", color=RED,
-                             description=(
-                                 f"**Server:** {guild.name}\n"
-                                 f"**Reason:** {reason}\n"
-                                 f"**Total Warnings:** {count}/3\n\n"
-                                 f"{'⚠️ One more warning and you will be kicked!' if count == 2 else ''}"
-                             ))
-    dm_embed.set_footer(text=FOOTER)
+    # === NORMAL WARNING (LESS THAN 3) ===
+    dm_embed = discord.Embed(
+        title="🚨 You Have Been Warned",
+        color=RED,
+        description=(
+            f"**Server:** {guild.name}\n"
+            f"**Moderator:** {mod.mention}\n"
+            f"**Reason:** {reason}\n"
+            f"**Total Warnings:** {count}/3\n\n"
+            f"{'⚠️ One more warning and you will be kicked!' if count == 2 else ''}"
+        )
+    ).set_footer(text=FOOTER)
     dm_ok = await dm_user(member, dm_embed)
 
-    e = success_embed("Warning Issued", 
-                      f"{member.mention} has been warned.\n**Reason:** {reason}\n**Total Warnings:** {count}/3"
-                      + ("\n\n⚠️ *One more warning will result in an auto-kick.*" if count == 2 else ""),
-                      ctx_or_inter)
+    e = success_embed(
+        "Warning Issued",
+        f"{member.mention} has been warned.\n"
+        f"**Reason:** {reason}\n"
+        f"**Moderator:** {mod.mention}\n"
+        f"**Total Warnings:** {count}/3"
+        + ("\n\n⚠️ *One more warning will result in an auto-kick.*" if count == 2 else ""),
+        ctx_or_inter
+    )
     e.add_field(name="DM Alert", value="✅ Sent alert in DM" if dm_ok else "❌ Could not send DM")
     await send_embed(ctx_or_inter, e)
 
@@ -286,25 +304,61 @@ async def unwarn_prefix(ctx, member: discord.Member):
     await _unwarn(ctx, member)
 
 @bot.tree.command(name="unwarn", description="🚨 Remove the latest warning from a member")
-@app_commands.describe(member="Member to remove warning from")
+@app_commands.describe(member="Member to remove a warning from")
 async def unwarn_slash(inter: discord.Interaction, member: discord.Member):
     if not inter.user.guild_permissions.kick_members:
         return await inter.response.send_message(embed=no_perm_embed(), ephemeral=True)
     await _unwarn(inter, member)
 
 async def _unwarn(ctx_or_inter, member: discord.Member):
-    guild = ctx_or_inter.guild if isinstance(ctx_or_inter, commands.Context) else ctx_or_inter.guild
+    guild = ctx_or_inter.guild
+    mod = ctx_or_inter.author if isinstance(ctx_or_inter, commands.Context) else ctx_or_inter.user
+
     async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT id FROM warnings WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT 1",
-                              (guild.id, member.id)) as c:
+        # Get the latest warning
+        async with db.execute(
+            "SELECT id FROM warnings WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT 1",
+            (guild.id, member.id)
+        ) as c:
             row = await c.fetchone()
+
+        # If no warnings exist
         if not row:
-            return await send_embed(ctx_or_inter, error_embed("No Warnings", f"{member.mention} has no warnings on record."))
+            return await send_embed(
+                ctx_or_inter,
+                error_embed("No Warnings", f"{member.mention} has no warnings on record.")
+            )
+
+        # Delete the latest warning
         await db.execute("DELETE FROM warnings WHERE id=?", (row[0],))
         await db.commit()
-    mod = ctx_or_inter.author if isinstance(ctx_or_inter, commands.Context) else ctx_or_inter.user
-    await log_action(guild.id, "UNWARN", member.id, mod.id, "Warning removed")
-    await send_embed(ctx_or_inter, success_embed("Warning Removed", f"Latest warning removed from {member.mention}.", ctx_or_inter))
+
+        # Count remaining warnings
+        async with db.execute(
+            "SELECT COUNT(*) FROM warnings WHERE guild_id=? AND user_id=?",
+            (guild.id, member.id)
+        ) as c:
+            remaining = (await c.fetchone())[0]
+
+    # Log moderation action
+    await log_action(guild.id, "UNWARN", member.id, mod.id, f"Warning removed (Remaining: {remaining})")
+
+    # Create feedback embed
+    if remaining == 0:
+        desc = (
+            f"All warnings cleared for {member.mention}.\n"
+            f"**Moderator:** {mod.mention}\n"
+            f"**Status:** 🟢 Clean Record"
+        )
+    else:
+        desc = (
+            f"Latest warning removed from {member.mention}.\n"
+            f"**Moderator:** {mod.mention}\n"
+            f"**Remaining Warnings:** {remaining}/3"
+        )
+
+    e = success_embed("Warning Removed", desc, ctx_or_inter)
+    await send_embed(ctx_or_inter, e)
 
 @unwarn_prefix.error
 async def unwarn_error(ctx, error):
