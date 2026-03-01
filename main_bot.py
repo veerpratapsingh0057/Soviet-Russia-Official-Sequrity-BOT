@@ -717,49 +717,67 @@ async def nick_error(ctx, error):
 #  UTILITY COMMANDS
 # ════════════════════════════════════════════════════════════════════════════════
 
-# ─── ANNOUNCE ─────────────────────────────────────────────────────────────────
+# ─── ANNOUNCE ────────────────────────────────────────────────────────────────
 @bot.command(name="announce")
 @commands.has_permissions(manage_messages=True)
 async def announce_prefix(ctx, *, message: str = None):
-    await _announce(ctx, message)
+    await _announce(ctx, message, None, False, "embed")
 
-@bot.tree.command(name="announce", description="📢 Make an announcement with role or everyone mention")
+@bot.tree.command(name="announce", description="📢 Make an announcement (embed or normal)")
 @app_commands.describe(
     message="The announcement message",
     role="Role to mention (optional)",
-    everyone="Mention @everyone (True/False)"
+    everyone="Mention @everyone (True/False)",
+    content_type="Send as embed or normal message (default: embed)"
 )
-async def announce_slash(inter: discord.Interaction, message: str, role: discord.Role = None, everyone: bool = False):
+@app_commands.choices(content_type=[
+    app_commands.Choice(name="Embed", value="embed"),
+    app_commands.Choice(name="Normal", value="normal")
+])
+async def announce_slash(
+    inter: discord.Interaction,
+    message: str,
+    role: discord.Role = None,
+    everyone: bool = False,
+    content_type: app_commands.Choice[str] = None
+):
     if not inter.user.guild_permissions.manage_messages:
         return await inter.response.send_message(embed=no_perm_embed(), ephemeral=True)
-    await _announce(inter, message, role, everyone)
+    content_mode = content_type.value if content_type else "embed"
+    await inter.response.defer(thinking=True)
+    await _announce(inter, message, role, everyone, content_mode)
 
-async def _announce(ctx_or_inter, message: str = None, role: discord.Role = None, everyone: bool = False):
+# ─── Core Function ───────────────────────────────────────────────────────────
+async def _announce(ctx_or_inter, message: str, role: discord.Role = None, everyone: bool = False, mode: str = "embed"):
     if not message:
         return await send_embed(ctx_or_inter, error_embed("Missing Message", "You must provide a message to announce."))
 
-    mention_text = ""
-    if everyone:
-        mention_text = "@everyone"
-    elif role:
-        mention_text = role.mention
-
+    mention_text = "@everyone" if everyone else (role.mention if role else "")
     MAX_LEN = 2000
-    message_parts = [message[i:i + MAX_LEN] for i in range(0, len(message), MAX_LEN)]
+    parts = [message[i:i + MAX_LEN] for i in range(0, len(message), MAX_LEN)]
 
-    for i, part in enumerate(message_parts):
-        embed = discord.Embed(
-            title=f"📢 Announcement {'(Part '+str(i+1)+')' if len(message_parts) > 1 else ''}",
-            description=part,
-            color=GREEN
-        )
-        embed.set_footer(text=FOOTER)
-        if bot.user:
-            embed.set_thumbnail(url=bot.user.display_avatar.url)
-        if isinstance(ctx_or_inter, discord.Interaction):
-            await ctx_or_inter.channel.send(content=mention_text if i == 0 else None, embed=embed)
-        else:
-            await ctx_or_inter.send(content=mention_text if i == 0 else None, embed=embed)
+    for i, part in enumerate(parts):
+        if mode == "embed":
+            embed = discord.Embed(
+                title=f"📢 Announcement {'(Part '+str(i+1)+')' if len(parts) > 1 else ''}",
+                description=part,
+                color=GREEN
+            )
+            embed.set_footer(text=FOOTER)
+            if bot.user:
+                embed.set_thumbnail(url=bot.user.display_avatar.url)
+
+            if isinstance(ctx_or_inter, discord.Interaction):
+                await ctx_or_inter.channel.send(content=mention_text if i == 0 else None, embed=embed)
+            else:
+                await ctx_or_inter.send(content=mention_text if i == 0 else None, embed=embed)
+
+        else:  # mode == "normal"
+            msg = f"{mention_text}\n\n{part}" if i == 0 and mention_text else part
+            if isinstance(ctx_or_inter, discord.Interaction):
+                await ctx_or_inter.channel.send(msg)
+            else:
+                await ctx_or_inter.send(msg)
 
     await send_embed(ctx_or_inter, success_embed("Announcement Sent", "Your message was successfully sent.", ctx_or_inter), ephemeral=True)
 
@@ -793,7 +811,8 @@ async def _ping(ctx_or_inter):
 
     e = discord.Embed(title="⚙️ Latency Report", color=GREEN)
     e.add_field(name="🤖 Bot Latency", value=f"`{bot_latency:.2f}ms`", inline=True)
-    e.add_field(name="🗄️ DB Latency", value=f"`{db_latency:.2f}ms`", inline=True)
+    e.add_field
+    (name="🗄️ DB Latency", value=f"`{db_latency:.2f}ms`", inline=True)
     e.add_field(name="⚡ Response Ping", value=f"`{response_latency:.2f}ms`", inline=True)
     e.set_footer(text=FOOTER)
     if bot.user:
