@@ -113,15 +113,34 @@ def parse_duration(duration_str: str) -> datetime.timedelta | None:
             "h": datetime.timedelta(hours=value), "d": datetime.timedelta(days=value)}[unit]
 
 # ─── Events ───────────────────────────────────────────────────────────────────
+@tasks.loop(minutes=1)  # Change every 60 seconds (you can tweak this)
+async def status_loop():
+    try:
+        # 1️⃣ Playing Soviet Russia Life Simulator
+        await bot.change_presence(
+            status=discord.Status.dnd
+            activity=discord.Game(name="Soviet Russia Life Simulator")
+        )
+        await asyncio.sleep(30)
+
+
+        # 3️⃣ Watching Happy Holi From Soviet Russia
+        await bot.change_presence(
+            status=discord.Status.dnd
+            activity=discord.Activity(
+                type=discord.ActivityType.watching,
+                name="Happy Holi From Soviet Russia"
+            )
+        )
+        await asyncio.sleep(30)
+    except Exception as e:
+        print(f"[Status Loop Error] {e}")
+
+
 @bot.event
 async def on_ready():
     await init_db()
     await bot.tree.sync()
-    activity = discord.Activity(type=discord.ActivityType.watching, name="Soviet Russia Life Simulator")
-    await bot.change_presence(
-    status=discord.Status.dnd,
-    activity=discord.Game(name="Soviet Russia Life Simulator")
-)
     print(f"[SRLS Bot] Logged in as {bot.user} | Guilds: {len(bot.guilds)}")
 
 # ════════════════════════════════════════════════════════════════════════════════
