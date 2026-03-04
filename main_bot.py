@@ -142,6 +142,8 @@ async def on_ready():
     await init_db()
     await bot.tree.sync()
     print(f"[SRLS Bot] Logged in as {bot.user} | Guilds: {len(bot.guilds)}")
+    if not status_loop.is_running():
+        status_loop.start()
 
 # ════════════════════════════════════════════════════════════════════════════════
 #  MODERATION COMMANDS
