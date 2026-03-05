@@ -113,7 +113,7 @@ def parse_duration(duration_str: str) -> datetime.timedelta | None:
             "h": datetime.timedelta(hours=value), "d": datetime.timedelta(days=value)}[unit]
 
 # ─── Events ───────────────────────────────────────────────────────────────────
-@tasks.loop(minutes=1)  # Change every 60 seconds (you can tweak this)
+@tasks.loop(seconds = 30)  # Change every 60 seconds (you can tweak this)
 async def status_loop():
     try:
         # 1️⃣ Playing Soviet Russia Life Simulator
@@ -129,7 +129,7 @@ async def status_loop():
             status=discord.Status.dnd,
             activity=discord.Activity(
                 type=discord.ActivityType.watching,
-                name="Happy Holi From Soviet Russia"
+                name="Join the revolution"
             )
         )
         await asyncio.sleep(30)
