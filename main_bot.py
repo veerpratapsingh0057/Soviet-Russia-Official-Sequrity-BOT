@@ -148,52 +148,118 @@ async def on_ready():
 # ════════════════════════════════════════════════════════════════════════════════
 #  MODERATION COMMANDS
 # ════════════════════════════════════════════════════════════════════════════════
+# ─── MUTE ─────────────────────────────────────────────────────────────
 
-# ─── MUTE ─────────────────────────────────────────────────────────────────────
 @bot.command(name="mute")
 @commands.has_permissions(moderate_members=True)
 async def mute_prefix(ctx, member: discord.Member, duration: str, *, reason: str = "No reason provided"):
     await _mute(ctx, member, duration, reason)
 
-@bot.tree.command(name="mute", description="🔨 Mute a member for a duration (e.g. 10m, 1h, 1d)")
-@app_commands.describe(member="Member to mute", duration="Duration (e.g. 10m, 2h)", reason="Reason")
+
+@bot.tree.command(name="mute", description="🔨 Mute a member for a duration (10m, 1h, 1d)")
+@app_commands.describe(member="Member to mute", duration="Duration", reason="Reason")
 async def mute_slash(inter: discord.Interaction, member: discord.Member, duration: str, reason: str = "No reason provided"):
+
     if not inter.user.guild_permissions.moderate_members:
         return await inter.response.send_message(embed=no_perm_embed(), ephemeral=True)
+
     await _mute(inter, member, duration, reason)
 
+
 async def _mute(ctx_or_inter, member: discord.Member, duration: str, reason: str):
-    td = parse_duration(duration)
-    if not td:
-        return await send_embed(ctx_or_inter, error_embed("Invalid Duration", "Use formats like `10s`, `5m`, `2h`, `1d`."))
-    if td.total_seconds() > 2419200:
-        return await send_embed(ctx_or_inter, error_embed("Duration Too Long", "Maximum timeout is 28 days."))
 
-    until = discord.utils.utcnow() + td
-    try:
-        await member.timeout(until, reason=reason)
-    except discord.Forbidden:
-        return await send_embed(ctx_or_inter, error_embed("Action Failed", "I don't have permission to timeout this member."))
-
-    guild = ctx_or_inter.guild if isinstance(ctx_or_inter, commands.Context) else ctx_or_inter.guild
+    guild = ctx_or_inter.guild
     mod = ctx_or_inter.author if isinstance(ctx_or_inter, commands.Context) else ctx_or_inter.user
+
+    # ─── PROTECTION CHECKS ───
+    if member == mod:
+        return await send_embed(ctx_or_inter, error_embed("Invalid Action", "You cannot mute yourself."))
+
+    if member.top_role >= guild.me.top_role:
+        return await send_embed(ctx_or_inter, error_embed("Role Hierarchy", "That member has a higher role than me."))
+
+    if member.is_timed_out():
+        return await send_embed(ctx_or_inter, error_embed("Already Muted", f"{member.mention} is already muted."))
+
+
+    # ─── PARSE DURATION ───
+    td = parse_duration(duration)
+
+    if not td:
+        return await send_embed(ctx_or_inter,
+            error_embed("Invalid Duration", "Use formats like `10s`, `5m`, `2h`, `1d`."))
+
+    if td.total_seconds() > 2419200:
+        return await send_embed(ctx_or_inter,
+            error_embed("Duration Too Long", "Maximum timeout is **28 days**."))
+
+
+    # ─── APPLY TIMEOUT ───
+    until = discord.utils.utcnow() + td
+
+    try:
+        await member.timeout(until, reason=f"{reason} | Moderator: {mod}")
+    except discord.Forbidden:
+        return await send_embed(ctx_or_inter,
+            error_embed("Action Failed", "I don't have permission to timeout this member."))
+
+
+    # ─── LOG ACTION ───
     await log_action(guild.id, "MUTE", member.id, mod.id, reason)
 
-    dm_embed = discord.Embed(title="🔨 You Have Been Muted", color=RED,
-                             description=f"**Server:** {guild.name}\n**Duration:** {duration}\n**Reason:** {reason}")
+
+    # ─── DM ALERT ───
+    dm_embed = discord.Embed(
+        title="🔨 You Have Been Muted",
+        color=RED
+    )
+
+    dm_embed.add_field(name="Server", value=guild.name, inline=False)
+    dm_embed.add_field(name="Moderator", value=mod.mention, inline=True)
+    dm_embed.add_field(name="Duration", value=duration, inline=True)
+    dm_embed.add_field(name="Expires", value=f"<t:{int(until.timestamp())}:R>", inline=True)
+    dm_embed.add_field(name="Reason", value=reason, inline=False)
+    dm_embed.add_field(name="User ID", value=member.id, inline=False)
+
     dm_embed.set_footer(text=FOOTER)
+
     dm_ok = await dm_user(member, dm_embed)
 
-    e = success_embed("Member Muted", f"**{member.mention}** has been muted for **{duration}**.\n**Reason:** {reason}", ctx_or_inter)
-    e.add_field(name="DM Alert", value="✅ Sent alert in DM" if dm_ok else "❌ Could not send DM")
+
+    # ─── RESPONSE EMBED ───
+    e = discord.Embed(
+        title="🔇 Member Muted",
+        color=GREEN
+    )
+
+    e.add_field(name="User", value=f"{member.mention} (`{member.id}`)", inline=False)
+    e.add_field(name="Moderator", value=mod.mention, inline=True)
+    e.add_field(name="Duration", value=duration, inline=True)
+    e.add_field(name="Expires", value=f"<t:{int(until.timestamp())}:R>", inline=True)
+    e.add_field(name="Reason", value=reason, inline=False)
+
+    e.add_field(
+        name="DM Alert",
+        value="✅ Sent alert in DM" if dm_ok else "❌ Could not send DM",
+        inline=False
+    )
+
+    e.set_footer(text=FOOTER)
+
     await send_embed(ctx_or_inter, e)
 
+
+
+# ─── ERROR HANDLER ───
 @mute_prefix.error
 async def mute_error(ctx, error):
+
     if isinstance(error, commands.MissingPermissions):
         await ctx.send(embed=no_perm_embed())
+
     elif isinstance(error, commands.MemberNotFound):
         await ctx.send(embed=error_embed("Member Not Found", "Please mention a valid server member."))
+
     else:
         await ctx.send(embed=error_embed("Error", str(error)))
 
