@@ -10,6 +10,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 import aiosqlite
 import asyncio
+import os
 from datetime import datetime, timedelta
 from typing import Optional, Union
 import re
@@ -1557,4 +1558,4 @@ async def prefix(ctx, new_prefix: str = None):
 # ═══════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    bot.run("YOUR_BOT_TOKEN_HERE")
+    bot.run(os.getenv("TOKEN"))
