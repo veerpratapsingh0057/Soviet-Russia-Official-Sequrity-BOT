@@ -2,6 +2,7 @@
 About Soviet Russia Life Simulator Bot
 Soviet Russia Life Simulator - Official Discord Bot
 Production-level moderation and management system
+Founder: Vladimir_Alexi
 Author: SRLS Development Team
 License: MIT 
 """
